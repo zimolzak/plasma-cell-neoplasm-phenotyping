@@ -5,6 +5,13 @@ SELECT  *
   -- c88 is waldenstrom, really c88.0
   --icd10sid 1001480161
 
+
+/*
+10 inpatient stays, waldenstrom, PRIMARY dx.
+Not selecting PatientSID which is identifier.
+Note, this is not [Inpat].[InpatientDiagnosis] or [Inpat].[InpatientDischargeDiagnosis]
+*/
+
 SELECT TOP (10) 
 Sta3n
 --[InpatientSID]
@@ -105,12 +112,11 @@ Sta3n
 
 select top 10 
 ICD10SID, EventDateTime, VisitDateTime, VDiagnosisDateTime, AgentOrangeFlag, IonizingRadiationFlag, HeadNeckCancerFlag, CombatFlag, ShipboardHazardDefenseFlag
-
-from Outpat.VDiagnosisg
+from Outpat.VDiagnosis
 where ICD10SID = 1001480161
 
 
-
+/* brief look at lab */
 select top 100 *
 from CDWWork.dim.LabChemTest
 where sta3n = 580 and (LabChemTestName like '%kappa%'
@@ -118,3 +124,129 @@ or LabChemTestName like '%lambda%')
 
 select top 10 * from INFORMATION_SCHEMA.COLUMNS
 where COLUMN_NAME like '%loinc%'
+
+
+
+/* back to inpatient stays */
+
+select top 10 * from Inpat.InpatientDiagnosis
+where ICD10SID = 1001480161
+-- ordinal numbers like 0 0 0 9 3 7 16 9 3 4
+
+
+select top 10 * from Inpat.InpatientDischargeDiagnosis
+where ICD10SID = 1001480161
+-- similar pattern, ordinal 1 1 1 1 4 8 8 14 5 11
+
+
+/* back to lab, look for IgM */
+SELECT  * from dim.LabChemTest
+where Sta3n = 580 and LabChemTestName like '%igm%'
+-- N = 123 matches
+-- lots of anti-whatever IgM serologies. Infections, autoimmune.
+
+-- hand made list
+SELECT
+LabChemTestSID, LabChemTestName
+from dim.LabChemTest
+where LabChemTestSID in (
+1000103387,
+1000031838,
+1000036993,
+1000051256,
+1000066082,
+1000057555,
+1000052052,
+1000036277
+)
+/*
+LabChemTestSID	LabChemTestName
+1000031838	IGM ABS
+1000036277	ZZIGM, CONVALESCENT
+1000036993	IgM-Little Rock/d'cd 9/28/17
+1000051256	IGM/BEFORE 08/24/02
+1000052052	ZZIGM, ACUTE
+1000057555	ZZIGM
+1000066082	RESEARCH IGM
+1000103387	IGM
+
+*/
+
+select * from INFORMATION_SCHEMA.COLUMNS where COLUMN_NAME like 'loinc%'
+order by TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
+
+
+
+select top 10
+[LabChemTestSID],
+--[PatientSID], 
+[LabChemSpecimenDateTime], 
+[LabChemResultValue], [LabChemResultNumericValue], [TopographySID], 
+[LOINCSID], [Units], [Abnormal], [RefHigh], [RefLow]
+from chem.LabChem
+where LabChemTestSID in (
+1000103387,
+1000031838,
+1000036993,
+1000051256,
+1000066082,
+1000057555,
+1000052052,
+1000036277
+)
+-- and LabChemSpecimenDateTime > '2015-01-01'  -- seems to perform badly w/ this.
+
+
+select distinct * from (
+	select top 100
+	LabChemTestSID, LOINCSID
+	from chem.LabChem
+	where LabChemTestSID in (
+	1000103387,
+	1000031838,
+	1000036993,
+	1000051256,
+	1000066082,
+	1000057555,
+	1000052052,
+	1000036277
+	)
+) as x
+
+/*
+finding only these 3, but mind you, it's only top 100:
+1000036993	IgM-Little Rock/d'cd 9/28/17
+1000031838	IGM ABS
+1000051256	IGM/BEFORE 08/24/02
+
+
+LabChemTestSID	LOINCSID
+1000036993	-1
+1000031838	1000224138
+1000051256	1000273133
+
+*/
+
+
+
+-- investigate just that one sid that looks most recent.
+select top 3
+[LabChemTestSID],
+--[PatientSID], 
+[LabChemSpecimenDateTime], 
+[LabChemResultValue], [LabChemResultNumericValue], [TopographySID], 
+[LOINCSID], [Units], [Abnormal], [RefHigh], [RefLow]
+from chem.LabChem
+where LabChemTestSID in (
+1000031838
+)
+
+select 
+LOINCSID, loinc, Component, Property, Units
+from dim.LOINC where LOINCSID in (1000224138, 1000273133)
+/*oh-ho, that 1000224138 code is some weird platelet thing.
+
+LOINCSID	loinc	Component	Property	Units
+1000224138	11125-2	PLATELET MORPHOLOGY FINDING	Presence or Identity	NULL
+1000273133	2472-9	IGM	Mass Concentration	G/L;MG/DL
+*/
