@@ -1,17 +1,15 @@
-/****** Script for SelectTopNRows command from SSMS  ******/
+--find our icd code and its sid
 SELECT  *
   FROM [CDWWork].[Dim].[ICD10]
   where sta3n = 580 and (ICD10Code like 'c88%' or ICD10Code like 'c90%')
   -- c88 is waldenstrom, really c88.0
   --icd10sid 1001480161
 
-
 /*
-10 inpatient stays, waldenstrom, PRIMARY dx.
+10 inpatient stays, waldenstrom, PRINCIPAL dx.
 Not selecting PatientSID which is identifier.
 Note, this is not [Inpat].[InpatientDiagnosis] or [Inpat].[InpatientDischargeDiagnosis]
 */
-
 SELECT TOP (10) 
 Sta3n
 --[InpatientSID]
@@ -111,21 +109,11 @@ Sta3n
 
 --outpatient
 select top 10 
-ICD10SID, EventDateTime, VisitDateTime, VDiagnosisDateTime, AgentOrangeFlag, IonizingRadiationFlag, HeadNeckCancerFlag, CombatFlag, ShipboardHazardDefenseFlag
+ICD10SID, EventDateTime, VisitDateTime, VDiagnosisDateTime
 from Outpat.VDiagnosis
 where ICD10SID = 1001480161
-
-
-/* brief look at lab */
-select top 100 *
-from CDWWork.dim.LabChemTest
-where sta3n = 580 and (LabChemTestName like '%kappa%'
-or LabChemTestName like '%lambda%')
-
-select top 10 * from INFORMATION_SCHEMA.COLUMNS
-where COLUMN_NAME like '%loinc%'
-
-
+--EventDateTime usually NULL
+--VisitDateTime approx equal to VDiagnosisDateTime
 
 /* back to inpatient stays
 but this time look at the other 2 tables */
@@ -134,11 +122,27 @@ select top 10 * from Inpat.InpatientDiagnosis
 where ICD10SID = 1001480161
 -- ordinal numbers are in the range of: 0 0 0 9 3 7 16 9 3 4
 
-
 select top 10 * from Inpat.InpatientDischargeDiagnosis
 where ICD10SID = 1001480161
 -- similar pattern, ordinals are like: 1 1 1 1 4 8 8 14 5 11
 
+-- CONCLUSION
+-- we probably should use those two {InpatientDiagnosis and InpatientDischargeDiagnosis} and not "merely" inpat.inpatient
+-- outpat may be best of all
+-- ideally use all 3
+
+
+
+
+/******** ******** ******** ******** ******** ******** ******** ******** ********/
+/* brief look at lab */
+select top 100 *
+from CDWWork.dim.LabChemTest
+where sta3n = 580 and (LabChemTestName like '%kappa%'
+or LabChemTestName like '%lambda%')
+
+select top 10 * from INFORMATION_SCHEMA.COLUMNS
+where COLUMN_NAME like '%loinc%'
 
 /* back to lab, look for IgM */
 SELECT  * from dim.LabChemTest
@@ -177,7 +181,6 @@ LabChemTestSID	LabChemTestName
 
 select * from INFORMATION_SCHEMA.COLUMNS where COLUMN_NAME like 'loinc%'
 order by TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
-
 
 --look at contents of fact table
 select top 10
@@ -229,11 +232,8 @@ LabChemTestSID	LOINCSID
 1000031838	1000224138
 1000051256	1000273133
 
-Possibly I am missing that 1000103387 which looks like the best of all
-
+Possibly I am missing the 1000103387 code, which looks like the best of all
 */
-
-
 
 -- investigate just that one sid that looks most recent.
 select top 3
@@ -263,12 +263,6 @@ Therefore the "1000051256	IGM/BEFORE 08/24/02" is valid.
 Problem is: it looks old.
 */
 
-
-
-
-
-
-
 -- go looking for 103387: the best-looking labchemtestsid for IgM
 -- I hope it is associated with a reassuring looking LOINC
 select top 3
@@ -280,3 +274,32 @@ from chem.LabChem
 where LabChemTestSID in (
 1000103387
 )
+--okay this performance is horrible; probably just too many rows in that fact table
+
+select * from INFORMATION_SCHEMA.COLUMNS where COLUMN_NAME = 'LabChemTestSID'
+order by TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
+
+select * from INFORMATION_SCHEMA.COLUMNS where COLUMN_NAME = 'loincSID'
+order by TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
+
+--here is an interesting dim that I found
+--seems to have generic info about each labchemtestSID without results
+--wild that things like LOINCSID get propagated into Chem.LabChem and not normalized out, but okay
+select 
+	LabChemTestSpecimenSID, LabChemTestSID, Sta3n, LOINCSID, LowReference, HighReference, Units
+from dim.LabChemTestSpecimen
+where LabChemTestSID = 1000103387
+
+/*
+Hooray, there is our hoped-for LOINCSID:
+
+LabChemTestSpecimenSID	LabChemTestSID	Sta3n	LOINCSID	LowReference	HighReference	Units
+1000098536	1000103387	580	1000273133	43	279	mg/dL
+*/
+
+
+
+
+/******** ******** ******** ******** ******** ******** ******** ******** ********/
+--Lymphoplasmacytic lymphoma
+-- avoid ICD 91.1* because that is leukemia, not lymphoma
