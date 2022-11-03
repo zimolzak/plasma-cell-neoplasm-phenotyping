@@ -1,3 +1,12 @@
+/*********
+We know how to find diagnoses.
+ICD10SID = 1001480161
+Two inpat and one outpat table, plus maybe problem list.
+
+We know how to find IgM.
+LabChemTestSID = 1000103387
+*********/
+
 --find our icd code and its sid
 SELECT  *
   FROM [CDWWork].[Dim].[ICD10]
@@ -135,7 +144,7 @@ where ICD10SID = 1001480161
 
 
 /******** ******** ******** ******** ******** ******** ******** ******** ********/
-/* brief look at lab */
+/* lab */
 select top 100 *
 from CDWWork.dim.LabChemTest
 where sta3n = 580 and (LabChemTestName like '%kappa%'
@@ -144,7 +153,7 @@ or LabChemTestName like '%lambda%')
 select top 10 * from INFORMATION_SCHEMA.COLUMNS
 where COLUMN_NAME like '%loinc%'
 
-/* back to lab, look for IgM */
+/* look for IgM */
 SELECT  * from dim.LabChemTest
 where Sta3n = 580 and LabChemTestName like '%igm%'
 -- N = 123 matches
@@ -155,14 +164,14 @@ SELECT
 LabChemTestSID, LabChemTestName
 from dim.LabChemTest
 where LabChemTestSID in (
-1000103387,
-1000031838,
-1000036993,
-1000051256,
-1000066082,
-1000057555,
-1000052052,
-1000036277
+	1000103387,
+	1000031838,
+	1000036993,
+	1000051256,
+	1000066082,
+	1000057555,
+	1000052052,
+	1000036277
 )
 /*
 RESULTS:
@@ -191,24 +200,6 @@ select top 10
 [LOINCSID], [Units], [Abnormal], [RefHigh], [RefLow]
 from chem.LabChem
 where LabChemTestSID in (
-1000103387,
-1000031838,
-1000036993,
-1000051256,
-1000066082,
-1000057555,
-1000052052,
-1000036277
-)
--- and LabChemSpecimenDateTime > '2015-01-01'  -- seems to perform badly w/ this.
-
---What labchemtestSIDs from my list actually get drawn in practice,
--- and what loincsid is associated with them?
-select distinct * from (
-	select top 100
-	LabChemTestSID, LOINCSID
-	from chem.LabChem
-	where LabChemTestSID in (
 	1000103387,
 	1000031838,
 	1000036993,
@@ -217,6 +208,25 @@ select distinct * from (
 	1000057555,
 	1000052052,
 	1000036277
+)
+-- and LabChemSpecimenDateTime > '2015-01-01'  -- seems to perform badly w/ this.
+-- numeric values like 1.3 to 97 (in the TOP 10). No crazy high ones.
+
+--What labchemtestSIDs from my list actually get drawn in practice,
+-- and what loincsid is associated with them?
+select distinct * from (
+	select top 100
+	LabChemTestSID, LOINCSID
+	from chem.LabChem
+	where LabChemTestSID in (
+		1000103387,
+		1000031838,
+		1000036993,
+		1000051256,
+		1000066082,
+		1000057555,
+		1000052052,
+		1000036277
 	)
 ) as x
 
@@ -275,6 +285,7 @@ where LabChemTestSID in (
 1000103387
 )
 --okay this performance is horrible; probably just too many rows in that fact table
+-- Unfortunate. Can't look at values.
 
 select * from INFORMATION_SCHEMA.COLUMNS where COLUMN_NAME = 'LabChemTestSID'
 order by TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
@@ -301,5 +312,78 @@ LabChemTestSpecimenSID	LabChemTestSID	Sta3n	LOINCSID	LowReference	HighReference	
 
 
 /******** ******** ******** ******** ******** ******** ******** ******** ********/
---Lymphoplasmacytic lymphoma
--- avoid ICD 91.1* because that is leukemia, not lymphoma
+/* Next diagnosis code:
+Lymphoplasmacytic lymphoma (LPL)
+ avoid ICD 91.1* because that is leukemia, not lymphoma
+
+Supposedly C83.0* is the one because
+"""Applicable To
+Lymphoplasmacytic lymphoma
+Nodal marginal zone lymphoma
+Non-leukemic variant of B-CLL
+Splenic marginal zone lymphoma"""
+
+So it's C83.00 thru .09
+*/
+
+select *
+from dim.ICD10
+where ICD10Code like 'C83.0%'
+	and Sta3n = 580
+/*
+results:
+
+1001479964
+1001479965
+1001479966
+1001479967
+1001479968
+1001479969
+1001479970
+1001479971
+1001479972
+1001479973
+*/
+
+select top 10 
+ICD10SID, VisitDateTime
+from Outpat.VDiagnosis
+where ICD10SID in (
+	1001479964,
+	1001479965,
+	1001479966,
+	1001479967,
+	1001479968,
+	1001479969,
+	1001479970,
+	1001479971,
+	1001479972,
+	1001479973
+)
+--Conclusion:
+--confirmed, found real signal. Those SIDs are in use.
+--However, not clear to me (a general internist) whether this ICD (which means "Small cell B-cell lymphoma") will really be limited *only* to LPL,
+--or whether other entities are mixed in there, and ICD-10 is not enough.
+
+--NOTE TO SELF
+--we haven't looked at problem list yet, either
+
+
+
+
+/******************************************************************/
+--A bit about viscosity; just a thought
+select *
+from dim.LabChemTest
+where sta3n = 580
+and LabChemTestName like '%viscosity%'
+-- serum viscosity 1000044241
+
+select * from dim.LabChemTestSpecimen where LabChemTestSID = 1000044241
+-- loincsid 1000291041
+
+select * from dim.LOINC where loincsid = 1000291041
+-- just the one, for sta3n=580
+
+select * from dim.LOINC where LOINC = '3128-6'
+-- N = 130, approximately as expected.
