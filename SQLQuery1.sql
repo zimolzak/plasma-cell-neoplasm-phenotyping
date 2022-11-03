@@ -109,7 +109,7 @@ Sta3n
   FROM [CDWWork].[Inpat].[Inpatient]
   where PrincipalDiagnosisICD10SID = 1001480161
 
-
+--outpatient
 select top 10 
 ICD10SID, EventDateTime, VisitDateTime, VDiagnosisDateTime, AgentOrangeFlag, IonizingRadiationFlag, HeadNeckCancerFlag, CombatFlag, ShipboardHazardDefenseFlag
 from Outpat.VDiagnosis
@@ -127,16 +127,17 @@ where COLUMN_NAME like '%loinc%'
 
 
 
-/* back to inpatient stays */
+/* back to inpatient stays
+but this time look at the other 2 tables */
 
 select top 10 * from Inpat.InpatientDiagnosis
 where ICD10SID = 1001480161
--- ordinal numbers like 0 0 0 9 3 7 16 9 3 4
+-- ordinal numbers are in the range of: 0 0 0 9 3 7 16 9 3 4
 
 
 select top 10 * from Inpat.InpatientDischargeDiagnosis
 where ICD10SID = 1001480161
--- similar pattern, ordinal 1 1 1 1 4 8 8 14 5 11
+-- similar pattern, ordinals are like: 1 1 1 1 4 8 8 14 5 11
 
 
 /* back to lab, look for IgM */
@@ -160,6 +161,8 @@ where LabChemTestSID in (
 1000036277
 )
 /*
+RESULTS:
+
 LabChemTestSID	LabChemTestName
 1000031838	IGM ABS
 1000036277	ZZIGM, CONVALESCENT
@@ -176,7 +179,7 @@ select * from INFORMATION_SCHEMA.COLUMNS where COLUMN_NAME like 'loinc%'
 order by TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
 
 
-
+--look at contents of fact table
 select top 10
 [LabChemTestSID],
 --[PatientSID], 
@@ -196,7 +199,8 @@ where LabChemTestSID in (
 )
 -- and LabChemSpecimenDateTime > '2015-01-01'  -- seems to perform badly w/ this.
 
-
+--What labchemtestSIDs from my list actually get drawn in practice,
+-- and what loincsid is associated with them?
 select distinct * from (
 	select top 100
 	LabChemTestSID, LOINCSID
@@ -225,6 +229,8 @@ LabChemTestSID	LOINCSID
 1000031838	1000224138
 1000051256	1000273133
 
+Possibly I am missing that 1000103387 which looks like the best of all
+
 */
 
 
@@ -249,4 +255,28 @@ from dim.LOINC where LOINCSID in (1000224138, 1000273133)
 LOINCSID	loinc	Component	Property	Units
 1000224138	11125-2	PLATELET MORPHOLOGY FINDING	Presence or Identity	NULL
 1000273133	2472-9	IGM	Mass Concentration	G/L;MG/DL
+
+CONCLUSION!
+
+The loincsid 1000273133 is what we want.
+Therefore the "1000051256	IGM/BEFORE 08/24/02" is valid.
+Problem is: it looks old.
 */
+
+
+
+
+
+
+
+-- go looking for 103387: the best-looking labchemtestsid for IgM
+-- I hope it is associated with a reassuring looking LOINC
+select top 3
+[LabChemTestSID],
+[LabChemSpecimenDateTime], 
+[LabChemResultValue], [LabChemResultNumericValue], [TopographySID], 
+[LOINCSID], [Units], [Abnormal], [RefHigh], [RefLow]
+from chem.LabChem
+where LabChemTestSID in (
+1000103387
+)
